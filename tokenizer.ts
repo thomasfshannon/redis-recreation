@@ -76,36 +76,37 @@ function tokenizeMarker(input: string, current: number): TokenizerReturn {
   return [current, null]
 }
 
-const tokenizerFunctions: TokenizerFunction[] = [
-  tokenizeCRLF,
-  tokenizeMarker,
-  tokenizeString,
-  tokenizeNumber,
-]
+export class Tokenizer {
+  private tokenizerFunctions: TokenizerFunction[] = [
+    tokenizeCRLF,
+    tokenizeMarker,
+    tokenizeString,
+    tokenizeNumber,
+  ]
 
-export function tokenize(input: string): Token[] {
-  const tokens: Token[] = []
-  let current = 0
-  let char = ''
-  while (current < input.length) {
-    let foundToken = false
-    for (const tokenizer of tokenizerFunctions) {
-      const tokenizerResult = tokenizer(input, current)
-      const [newCurrent, token, resultChar] = tokenizerResult
-      current = newCurrent
-      if (resultChar) {
-        char = resultChar
+  public tokenize(input: string): Token[] {
+    const tokens: Token[] = []
+    let current = 0
+    let char = ''
+    while (current < input.length) {
+      let foundToken = false
+      for (const tokenizer of this.tokenizerFunctions) {
+        const tokenizerResult = tokenizer(input, current)
+        const [newCurrent, token, resultChar] = tokenizerResult
+        current = newCurrent
+        if (resultChar) {
+          char = resultChar
+        }
+        if (token) {
+          tokens.push(token)
+          foundToken = true
+          break
+        }
       }
-      if (token) {
-        tokens.push(token)
-        foundToken = true
-        break
+      if (!foundToken) {
+        throw new Error(`Unknown character: ${char}`)
       }
     }
-    if (!foundToken) {
-      throw new Error(`Unknown character: ${char}`)
-    }
+    return tokens
   }
-  return tokens
 }
-

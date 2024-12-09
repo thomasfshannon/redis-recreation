@@ -12,8 +12,11 @@ export class Parser implements RedisParser {
   /**
    * @param tokens - The tokens to parse
    */
-  constructor(tokens: Token[]) {
+  constructor() {}
+
+  public setup(tokens: Token[]) {
     this.tokens = tokens
+    this.current = 0
   }
 
   /**
@@ -128,4 +131,3 @@ export class Parser implements RedisParser {
     return ast
   }
 }
-

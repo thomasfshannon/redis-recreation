@@ -1,4 +1,6 @@
 import * as net from 'net'
+import { Parser } from './parser'
+import { Tokenizer } from './tokenizer'
 import type { RedisValue } from './types'
 
 const redisCache = new Map<string, string>()
@@ -24,9 +26,13 @@ const logger = {
   },
 }
 
-export class RedisInterpreter {
-  constructor(private ast: RedisValue[]) {
-    this.ast = ast
+export default class RedisInterpreter {
+  private ast: RedisValue[]
+  parser: Parser
+  tokenizer: Tokenizer
+  constructor() {
+    this.parser = new Parser()
+    this.tokenizer = new Tokenizer()
   }
 
   private executeCommand(command: {
@@ -99,5 +105,18 @@ export class RedisInterpreter {
       connection.write(response)
     }
   }
-}
 
+  /**
+   * Interpret the input and execute the commands
+   * @param input - The input to interpret
+   * @param connection - The connection to write the response to
+   * @returns The response from the server
+   */
+  interpretAndExecute(input: string, connection: net.Socket) {
+    const tokens = this.tokenizer.tokenize(input)
+    this.parser.setup(tokens)
+    this.ast = this.parser.parse()
+    const response = this.execute(connection)
+    return response
+  }
+}
