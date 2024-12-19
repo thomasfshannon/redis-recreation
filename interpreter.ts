@@ -73,17 +73,18 @@ export default class RedisInterpreter {
       case 'SET': {
         const [key, val] = command.args as CommandSet
         logger.info(`\n[Command]: SET ${key.value} ${val.value}\n`)
-        redisCache.set(key.value, val.value)
-        // todo: handle px and command arguments more gracefully
+
+        let expiryMs: number | undefined
         if (
           command.args.find(
             (arg) => arg.type === 'BulkString' && arg.value === 'px',
           )
         ) {
           const [, , , ms] = command.args as CommandSet
-          const unixTime = Date.now() + Number(ms.value)
-          redisTimeCache.set(key.value, unixTime)
+          expiryMs = Number(ms.value)
         }
+
+        this.rdbReader.setKey(key.value, val.value, expiryMs)
         logger.info(`\n[Response]: +OK\r\n`)
         return `+OK\r\n`
       }
