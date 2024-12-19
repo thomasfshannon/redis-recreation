@@ -40,6 +40,24 @@ function tokenizeString(
   current: number,
 ): [number, Token | null, char?: string] {
   const char = input[current]
+  
+  // Handle quoted strings
+  if (char === '"' || char === "'") {
+    let value = ''
+    let consumed = 1 // Start after the quote
+
+    while (current + consumed < input.length && input[current + consumed] !== char) {
+      value += input[current + consumed]
+      consumed++
+    }
+
+    if (current + consumed < input.length) {
+      consumed++ // Skip the closing quote
+      return [current + consumed, { type: 'Quote', value }]
+    }
+  }
+
+  // Handle regular strings
   if (char.match(/^[a-zA-Z0-9]+$/)) {
     let value = ''
     let consumed = 0
@@ -54,7 +72,8 @@ function tokenizeString(
 
     return [current + consumed, { type: 'BulkString', value }]
   }
-  return [current, null, char] // Return the problematic character
+  
+  return [current, null, char]
 }
 
 function tokenizeCRLF(input: string, current: number): TokenizerReturn {
@@ -76,37 +95,58 @@ function tokenizeMarker(input: string, current: number): TokenizerReturn {
   return [current, null]
 }
 
+function tokenizeQuote(input: string, current: number): TokenizerReturn {
+  const char = input[current]
+  if (char === '"' || char === "'") {
+    return [current + 1, { type: 'Quote', value: char }]
+  }
+  return [current, null]
+}
+
 export class Tokenizer {
   private tokenizerFunctions: TokenizerFunction[] = [
     tokenizeCRLF,
     tokenizeMarker,
+    tokenizeQuote,
     tokenizeString,
     tokenizeNumber,
   ]
 
   public tokenize(input: string): Token[] {
     const tokens: Token[] = []
-    let current = 0
-    let char = ''
-    while (current < input.length) {
-      let foundToken = false
-      for (const tokenizer of this.tokenizerFunctions) {
-        const tokenizerResult = tokenizer(input, current)
-        const [newCurrent, token, resultChar] = tokenizerResult
-        current = newCurrent
-        if (resultChar) {
-          char = resultChar
+    let i = 0
+    
+    while (i < input.length) {
+      const char = input[i]
+      
+      if (char === '*' && this.isStartOfLine(input, i)) {
+        // Only treat * as ArrayMarker if it's at the start of a line
+        tokens.push({ type: 'ArrayMarker', value: char })
+        i++
+      } else if (char === '$') {
+        tokens.push({ type: 'BulkMarker', value: char })
+        i++
+      } else if (char === '\r' && input[i + 1] === '\n') {
+        tokens.push({ type: 'CRLF', value: '\r\n' })
+        i += 2
+      } else {
+        // Handle bulk string content
+        let value = ''
+        while (i < input.length && input[i] !== '\r') {
+          value += input[i]
+          i++
         }
-        if (token) {
-          tokens.push(token)
-          foundToken = true
-          break
+        if (value) {
+          tokens.push({ type: 'BulkString', value })
         }
-      }
-      if (!foundToken) {
-        throw new Error(`Unknown character: ${char}`)
       }
     }
+    
     return tokens
+  }
+
+  private isStartOfLine(input: string, index: number): boolean {
+    // Check if this * is at the start of input or after a CRLF
+    return index === 0 || (input[index - 2] === '\r' && input[index - 1] === '\n')
   }
 }

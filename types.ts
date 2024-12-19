@@ -1,10 +1,5 @@
 export type Token = {
-  type:
-  | 'ArrayMarker' // For '*'
-  | 'BulkMarker' // For '$'
-  | 'Number' // For numbers
-  | 'BulkString' // For the actual string content
-  | 'CRLF' // For '\r\n' the RESP protocol terminator
+  type: 'Number' | 'BulkString' | 'CRLF' | 'ArrayMarker' | 'BulkMarker' | 'Quote'
   value: string
 }
 
@@ -15,4 +10,3 @@ export type RedisValue =
   | { type: 'BulkString'; value: string | null } // For '$' prefixed strings
   | { type: 'Array'; value: RedisValue[] } // For '*' prefixed arrays
   | { type: 'Command'; name: string; args: RedisValue[] }
-

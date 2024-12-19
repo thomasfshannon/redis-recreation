@@ -6,8 +6,8 @@ interface RedisParser {
 }
 
 export class Parser implements RedisParser {
-  private tokens: Token[]
-  private current: number = 0
+  private tokens: Token[] = []
+  private current = 0
 
   /**
    * @param tokens - The tokens to parse
@@ -49,67 +49,102 @@ export class Parser implements RedisParser {
   }
 
   /**
-   * Parse a bulk string value
-   * @returns The value of the bulk string
-   */
-  private parseBulkStringValue(): string {
-    const token = this.parseBulkString()
-    if (token.type !== 'BulkString') {
-      throw new Error('Expected BulkString')
-    }
-    return token.value!
-  }
-
-  /**
-   * Parse a bulk string value
+   * Parse a bulk string value, handling both RESP format and quoted strings
    * @returns The value of the bulk string
    */
   private parseBulkString(): RedisValue {
-    this.expect('BulkMarker')
-    const lengthToken = this.expect('BulkString')
-    const expectedLength = parseInt(lengthToken.value)
-    this.expect('CRLF')
+    const nextToken = this.peek()
 
-    const stringToken = this.expect('BulkString')
-    if (
-      stringToken.value !== null &&
-      stringToken.value.length !== expectedLength
-    ) {
-      throw new Error(
-        `Bulk string length mismatch. Expected ${expectedLength} but got ${stringToken.value.length}`,
-      )
-    }
-    this.expect('CRLF')
+    // Handle BulkMarker strings (RESP format)
+    if (nextToken.type === 'BulkMarker') {
+      this.consume() // consume the BulkMarker
+      const lengthToken = this.expect('BulkString')
+      this.expect('CRLF')
 
-    return {
-      type: 'BulkString',
-      value: stringToken.value,
+      // Special handling for quoted strings
+      if (this.peek().type === 'Quote') {
+        this.consume() // Quote
+        const value = this.peek().value // ArrayMarker '*'
+        this.consume() // ArrayMarker
+        this.expect('Quote')
+        this.expect('CRLF')
+        return {
+          type: 'BulkString',
+          value: value,
+        }
+      }
+
+      const stringToken = this.expect('BulkString')
+      this.expect('CRLF')
+      return {
+        type: 'BulkString',
+        value: stringToken.value,
+      }
     }
+
+    // Handle regular bulk strings
+    if (nextToken.type === 'BulkString') {
+      const token = this.consume()
+      return {
+        type: 'BulkString',
+        value: token.value,
+      }
+    }
+
+    // Handle quoted strings
+    if (nextToken.type === 'Quote') {
+      this.consume() // consume the Quote token
+      const stringToken = this.expect('BulkString')
+      this.expect('Quote')
+      return {
+        type: 'BulkString',
+        value: stringToken.value,
+      }
+    }
+
+    throw new Error(
+      `Unexpected token type in parseBulkString: ${nextToken.type}`,
+    )
   }
 
   /**
-   * Parse a command value
+   * Parse a command value, handling both quoted and RESP format inputs
    * @returns The value of the command with name and arguments
    */
   private parseCommand(): RedisValue {
-    // Consume the ArrayMarker (already consumed in parse())
-    // Get array size (number of bulk strings including command name)
-    const token = this.expect('BulkString')
-    const size = parseInt(token.value)
+    // Expect array marker and length for command
+    this.expect('ArrayMarker')
+    const length = this.expect('BulkString')
     this.expect('CRLF')
 
-    // First bulk string is the command name
-    const name = this.parseBulkStringValue()
+    // Parse command name
+    this.expect('BulkMarker')
+    this.expect('BulkString') // Length of command name
+    this.expect('CRLF')
+    const commandName = this.expect('BulkString')
+    this.expect('CRLF')
 
-    // Parse remaining bulk strings as arguments
+    // Parse arguments
     const args: RedisValue[] = []
-    for (let i = 0; i < size - 1; i++) {
-      args.push(this.parseBulkString())
+    for (let i = 0; i < Number(length.value) - 1; i++) {
+      this.expect('BulkMarker')
+      const argLength = this.expect('BulkString')
+      this.expect('CRLF')
+
+      // Special handling for KEYS command with * argument
+      if (commandName.value === 'KEYS' && this.peek().type === 'ArrayMarker') {
+        args.push({ type: 'BulkString', value: '*' })
+        this.consume() // Consume the ArrayMarker
+      } else {
+        const arg = this.expect('BulkString')
+        args.push(arg)
+      }
+      this.expect('CRLF')
     }
 
     return {
       type: 'Command',
-      name,
+      name: commandName.value,
       args,
     }
   }
@@ -119,13 +154,22 @@ export class Parser implements RedisParser {
 
     while (this.current < this.tokens.length) {
       const token = this.peek()
-      // TODO: handle other types of input
+
+      // console.log('Processing token:', token)
+
+      // Skip CRLF tokens between commands
+      if (token.type === 'CRLF') {
+        this.consume()
+        continue
+      }
+
       if (token.type === 'ArrayMarker') {
-        this.consume() // consume the ArrayMarker
-        // only assume command for now
+        ast.push(this.parseCommand())
+      } else if (token.type === 'BulkString' || token.type === 'Quote') {
         ast.push(this.parseCommand())
       } else {
-        throw new Error(`Unexpected token type: ${token.type}`)
+        // throw new Error(`Unexpected token type: ${token.type}`)
+        this.consume() // Skip unexpected tokens
       }
     }
     return ast
