@@ -1,10 +1,11 @@
-import { readFileSync, writeFileSync } from 'fs'
+import { writeFileSync } from 'fs'
 import { join } from 'path'
-import { RDB_TYPE } from './constants.ts'
-import { RESPFormatter } from './respFormatter.ts'
+import { RDB_TYPE } from './constants'
+import { FileReader } from './fileReader'
+import { RESPFormatter } from './respFormatter'
 
 // Enable logging temporarily to debug
-const LOGGED_ENABLED = true
+const LOGGED_ENABLED = false
 
 const logger = {
   info: (...message: any[]) => {
@@ -26,11 +27,19 @@ export class RDBReader {
   private filename: string = ''
   private cache: Map<string, string> = new Map()
   private expiryTimes: Map<string, number> = new Map()
+  private fileReader: FileReader
   isInitialized: boolean = false
+
+  constructor() {
+    // note: could be a default location in the future
+    this.fileReader = new FileReader('', '')
+  }
 
   read() {
     try {
-      this.data = readFileSync(join(this.directory, this.filename))
+      // this.data = readFileSync(join(this.directory, this.filename))
+      // this.data = Buffer.from('REDIS0006')
+      this.data = this.fileReader.readBuffer()
       this.position = 0
       this.parseHeader()
       this.parseDatabase()
@@ -59,14 +68,15 @@ export class RDBReader {
             logger.info(`Read expiry time: ${expiry}`)
             const k = this.readString()
             const v = this.readString()
-            console.log({ k, v })
             const valueType = this.readByte()
             const key = this.readByte()
-            console.log({ valueType, key })
             // Read the type byte that follows expiry
             if (valueType === RDB_TYPE.STRING) {
               const key = this.readEncodedString()
               const value = this.readEncodedString()
+              if (key && !value) {
+                throw new Error('Key without value')
+              }
               if (key && value) {
                 logger.info(`Set key with expiry: "${key}" -> "${value}"`)
                 this.cache.set(key, value)
@@ -229,7 +239,7 @@ export class RDBReader {
     }
   }
 
-  private parseHeader() {
+  public parseHeader() {
     // Check for "REDIS" magic string
     const magic = this.data.slice(0, 5).toString('ascii')
     if (magic !== 'REDIS') {
@@ -310,6 +320,7 @@ export class RDBReader {
   public setFileLocation(dir: string, filename: string) {
     this.directory = dir
     this.filename = filename
+    this.fileReader = new FileReader(this.directory, this.filename)
   }
 
   getKeys() {

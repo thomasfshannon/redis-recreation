@@ -2,7 +2,9 @@ import { unlinkSync, writeFileSync } from 'fs'
 import os from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { RDB_TYPE } from './constants'
 import { RDBReader } from './rdbReader'
+
 describe('RDBReader', () => {
   let rdbReader: RDBReader
   let tempDir: string
@@ -175,10 +177,19 @@ describe('RDBReader', () => {
     expect(rdbReader.getKey('orange')).toBe('$-1\r\n')
   })
 
+  test('should parse header', () => {
+    expect(rdbReader.parseHeader()).not.toThrow()
+  })
+  test('shouldnt parse header', () => {
+    rdbReader.data = Buffer.from([])
+    expect(() => rdbReader.parseHeader()).toThrowError(
+      'Invalid RDB file format: missing REDIS signature',
+    )
+  })
+
   test('should return all keys', () => {
     rdbReader.read()
     const keys = rdbReader.getKeys()
-    console.log(keys)
     expect(keys).toContain('raspberry')
     expect(keys).toContain('orange')
     expect(keys).toContain('grape')
@@ -206,6 +217,63 @@ describe('RDBReader', () => {
         expect(rdbReader.getKey('expiring')).toBe('$-1\r\n')
         resolve(true)
       }, 1100)
+    })
+  })
+
+  describe('parseDatabase', () => {
+    let reader: RDBReader
+
+    beforeEach(() => {
+      reader = new RDBReader()
+      // Access private members for testing
+      const testReader = reader as any
+
+      // Mock the file data with a simple Redis RDB format
+      testReader.data = Buffer.from([
+        // REDIS header (9 bytes)
+        ...Buffer.from('REDIS0006'),
+
+        // String key-value pair
+        RDB_TYPE.STRING,
+        3, // key length
+        ...Buffer.from('foo'), // key
+        3, // value length
+        ...Buffer.from('bar'), // value
+
+        // Expired key
+        RDB_TYPE.RDB_OPCODE_EXPIRETIME_MS,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0, // expiry timestamp (8 bytes)
+        3, // key length
+        ...Buffer.from('baz'), // key
+        3, // value length
+        ...Buffer.from('qux'), // value
+        RDB_TYPE.STRING, // type for expired key
+
+        // EOF marker
+        RDB_TYPE.RDB_OPCODE_EOF,
+      ])
+
+      testReader.position = 9 // Skip header
+      testReader.parseDatabase()
+    })
+
+    it('should correctly parse string key-value pairs', () => {
+      expect(reader.getKey('foo')).toContain('bar')
+    })
+
+    it('should handle expired keys', () => {
+      expect(reader.getKey('baz')).toBe('$-1\r\n') // Expired key should return null
+    })
+
+    it('should return null for non-existent keys', () => {
+      expect(reader.getKey('nonexistent')).toBe('$-1\r\n')
     })
   })
 })
