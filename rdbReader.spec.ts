@@ -148,6 +148,54 @@ describe('RDBReader', () => {
     }
   })
 
+  test('should parse database entries correctly', () => {
+    const reader = new RDBReader()
+    // Create a buffer that simulates a Redis RDB file
+    // Format: REDIS0006 + entries + EOF
+    const header = Buffer.from('REDIS0006', 'ascii')
+
+    // Create entries:
+    // 1. Simple string: "name" -> "john"
+    // 2. String with expiry: "session" -> "abc123" (expires in 1 hour)
+    const entries = Buffer.concat([
+      // String entry: "name" -> "john"
+      Buffer.from([
+        RDB_TYPE.STRING, // Type
+        0x04, // Key length (4)
+        ...Buffer.from('name'),
+        0x04, // Value length (4)
+        ...Buffer.from('john'),
+      ]),
+
+      // String with expiry: "session" -> "abc123"
+      Buffer.from([
+        RDB_TYPE.RDB_OPCODE_EXPIRETIME_MS, // Expiry opcode
+        ...Buffer.alloc(8).fill(1), // Expiry timestamp (8 bytes)
+        RDB_TYPE.STRING, // Type
+        0x07, // Key length (7)
+        ...Buffer.from('session'),
+        0x06, // Value length (6)
+        ...Buffer.from('abc123'),
+      ]),
+
+      // EOF marker
+      Buffer.from([RDB_TYPE.RDB_OPCODE_EOF]),
+    ])
+
+    const fullBuffer = Buffer.concat([header, entries])
+
+    // Set the buffer and initialize position
+    reader.setData(fullBuffer)
+    reader.parseHeader() // This will set position to 9
+
+    // Parse the database
+    reader.parseDatabase()
+
+    // Verify the results
+    expect(reader.getKey('name')).toMatch(/\$4\r\njohn\r\n/)
+    expect(reader.getKey('session')).toMatch(/\$6\r\nabc123\r\n/)
+  })
+
   test('should initialize and read RDB file successfully', () => {
     rdbReader.read()
     expect(rdbReader.isInitialized).toBe(true)
