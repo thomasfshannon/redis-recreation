@@ -37,8 +37,6 @@ export class RDBReader {
 
   read() {
     try {
-      // this.data = readFileSync(join(this.directory, this.filename))
-      // this.data = Buffer.from('REDIS0006')
       this.data = this.fileReader.readBuffer()
       this.position = 0
       this.parseHeader()
@@ -49,7 +47,13 @@ export class RDBReader {
     }
   }
 
-  private parseDatabase() {
+  setData(data: Buffer) {
+    this.data = data
+    this.position = 0
+    this.isInitialized = true
+  }
+
+  public parseDatabase() {
     logger.info('Starting to parse database at position:', this.position)
     while (this.position < this.data.length) {
       const opcode = this.data[this.position]
@@ -66,10 +70,7 @@ export class RDBReader {
           case RDB_TYPE.RDB_OPCODE_EXPIRETIME_MS:
             const expiry = this.readExpiry(opcode)
             logger.info(`Read expiry time: ${expiry}`)
-            const k = this.readString()
-            const v = this.readString()
             const valueType = this.readByte()
-            const key = this.readByte()
             // Read the type byte that follows expiry
             if (valueType === RDB_TYPE.STRING) {
               const key = this.readEncodedString()
@@ -86,8 +87,8 @@ export class RDBReader {
             break
 
           case RDB_TYPE.STRING:
-            const plainKey = this.readString()
-            const plainValue = this.readString()
+            const plainKey = this.readEncodedString()
+            const plainValue = this.readEncodedString()
             if (plainKey && plainValue) {
               this.cache.set(plainKey, plainValue)
               logger.info(`Set key: ${plainKey} -> ${plainValue}`)
@@ -165,6 +166,10 @@ export class RDBReader {
   }
 
   getKey(key: string): string {
+    const expiry = this.expiryTimes.get(key)
+    console.log('Key:', key)
+    console.log('Expiry:', expiry)
+    console.log('Current time:', Date.now())
     if (this.expiryTimes.has(key)) {
       const expiry = this.expiryTimes.get(key)
       const now = Date.now()
