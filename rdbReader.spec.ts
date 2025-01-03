@@ -1,7 +1,7 @@
 import { unlinkSync, writeFileSync } from 'fs'
 import os from 'os'
 import { join } from 'path'
-import { afterEach, beforeEach, describe, expect, test } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { RDB_TYPE } from './constants'
 import { RDBReader } from './rdbReader'
 
@@ -67,59 +67,37 @@ describe('RDBReader', () => {
     0x04,
     0x04,
 
-    // Key-value pairs with expiry times
-    0xfc,
-    0x00,
-    0x0c,
-    0x28,
-    0x8a,
-    0xc7,
-    0x01,
+    // Key-value pair with expiry time - simplified example
+    0xfc, // EXPIRETIME_MS opcode
     0x00,
     0x00,
-    0x00, // Expiry time
-    0x09,
-    0x72,
-    0x61,
-    0x73,
-    0x70,
-    0x62,
-    0x65,
-    0x72,
-    0x72,
-    0x79, // "raspberry"
-    0x05,
-    0x61,
-    0x70,
-    0x70,
-    0x6c,
-    0x65, // "apple"
+    0x00,
+    0x00,
+    0x60,
+    0x00,
+    0x00,
+    0x00, // Expiry timestamp (future time)
+    0x00, // String type
+    0x09, // Key length (9)
+    ...Buffer.from('raspberry'), // Key
+    0x05, // Value length (5)
+    ...Buffer.from('apple'), // Value
 
-    // More key-value pairs...
-    0xfc,
-    0x00,
-    0x0c,
-    0x28,
-    0x8a,
-    0xc7,
-    0x01,
+    // Second key-value pair
+    0xfc, // EXPIRETIME_MS opcode
     0x00,
     0x00,
-    0x00, // Expiry time
-    0x06,
-    0x6f,
-    0x72,
-    0x61,
-    0x6e,
-    0x67,
-    0x65, // "orange"
-    0x04,
-    0x70,
-    0x65,
-    0x61,
-    0x72, // "pear"
-
-    // ... more pairs ...
+    0x00,
+    0x00,
+    0x60,
+    0x00,
+    0x00,
+    0x00, // Expiry timestamp
+    0x00, // String type
+    0x06, // Key length (6)
+    ...Buffer.from('orange'), // Key
+    0x04, // Value length (4)
+    ...Buffer.from('pear'), // Value
 
     // EOF marker
     0xff,
@@ -203,10 +181,11 @@ describe('RDBReader', () => {
 
   test('should read key-value pairs correctly', () => {
     rdbReader.read()
+    const keys = rdbReader.getKeys()
+    console.log('Available keys:', keys)
+
     expect(rdbReader.getKey('raspberry')).toBe('$5\r\napple\r\n')
     // expect(rdbReader.getKey('orange')).toBe('$4\r\npear\r\n')
-    // expect(rdbReader.getKey('grape')).toBe('$6\r\norange\r\n')
-    // expect(rdbReader.getKey('banana')).toBe('$10\r\nstrawberry\r\n')
   })
 
   test('should handle non-existent keys', () => {
@@ -217,24 +196,24 @@ describe('RDBReader', () => {
   test('should handle expiry times', () => {
     rdbReader.read()
 
-    // Get the current timestamp in milliseconds
     const now = Date.now()
 
     // Set a key with expiry 1 second in the future
-    rdbReader.setKey('test-expiry', 'value', now + 1000)
+    const expiryTime = now + 1000 // 1 second from now
+    rdbReader.setKey('test-expiry', 'value', expiryTime)
 
     // Should exist now
     expect(rdbReader.getKey('test-expiry')).toBe('$5\r\nvalue\r\n')
 
     // Mock the current time to be after expiry
-    const originalDateNow = Date.now
-    Date.now = jest.fn(() => now + 2000)
+    vi.useFakeTimers()
+    vi.setSystemTime(now + 2000) // Move time 2 seconds forward
 
     // Should be expired
     expect(rdbReader.getKey('test-expiry')).toBe('$-1\r\n')
 
-    // Restore original Date.now
-    Date.now = originalDateNow
+    // Cleanup
+    vi.useRealTimers()
   })
 
   test('should parse header', () => {
@@ -257,13 +236,11 @@ describe('RDBReader', () => {
   })
 
   test('should return all keys', () => {
-    rdbReader.read()
     rdbReader.setFileLocation(tempDir, tempFile)
+    rdbReader.read()
     const keys = rdbReader.getKeys()
     expect(keys).toContain('raspberry')
     expect(keys).toContain('orange')
-    expect(keys).toContain('grape')
-    expect(keys).toContain('banana')
   })
 
   test('should handle setting new keys', () => {

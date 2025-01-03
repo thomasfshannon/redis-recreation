@@ -38,12 +38,16 @@ export class RDBReader {
   read() {
     try {
       this.data = this.fileReader.readBuffer()
+      console.log('Buffer length:', this.data.length) // Debug line
       this.position = 0
       this.parseHeader()
+      console.log('After header parse, position:', this.position) // Debug line
       this.parseDatabase()
+      console.log('Cache size:', this.cache.size) // Debug line
       this.isInitialized = true
     } catch (error) {
-      console.error('Error reading RDB file:', error)
+      console.error('[RDBReader]: Error reading RDB file:', error)
+      throw error // Rethrow to make test fail with actual error
     }
   }
 
@@ -54,101 +58,117 @@ export class RDBReader {
   }
 
   public parseDatabase() {
-    logger.info('Starting to parse database at position:', this.position)
+    console.log('Starting database parse at position:', this.position) // Debug line
+
     while (this.position < this.data.length) {
       const opcode = this.data[this.position]
-      logger.info(
-        `Processing opcode: 0x${opcode.toString(16)} at position ${
-          this.position
-        }`,
-      )
-      this.position++
+      console.log(
+        `At position ${this.position}, found opcode: 0x${opcode.toString(16)}`,
+      ) // Debug line
 
-      try {
-        switch (opcode) {
-          case RDB_TYPE.RDB_OPCODE_EXPIRETIME:
-          case RDB_TYPE.RDB_OPCODE_EXPIRETIME_MS:
-            const expiry = this.readExpiry(opcode)
-            logger.info(`Read expiry time: ${expiry}`)
-            const valueType = this.readByte()
-            // Read the type byte that follows expiry
-            if (valueType === RDB_TYPE.STRING) {
-              const key = this.readEncodedString()
-              const value = this.readEncodedString()
-              if (key && !value) {
-                throw new Error('Key without value')
-              }
-              if (key && value) {
-                logger.info(`Set key with expiry: "${key}" -> "${value}"`)
-                this.cache.set(key, value)
-                this.expiryTimes.set(key, expiry)
-              }
-            }
-            break
-
-          case RDB_TYPE.STRING:
-            const plainKey = this.readEncodedString()
-            const plainValue = this.readEncodedString()
-            if (plainKey && plainValue) {
-              this.cache.set(plainKey, plainValue)
-              logger.info(`Set key: ${plainKey} -> ${plainValue}`)
-            }
-            break
-
-          case RDB_TYPE.RDB_OPCODE_AUX:
-            const auxKey = this.readString()
-            if (auxKey === 'redis-bits') {
-              const byte = this.readByte() || 0
-              if (byte === 0xc0) {
-                this.position++ // Skip the value
-                logger.info('Skipped redis-bits special encoding')
-              }
-            } else {
-              const auxValue = this.readString()
-              logger.info(`Skipping AUX field: ${auxKey} = ${auxValue}`)
-            }
-            break
-
-          case RDB_TYPE.RDB_OPCODE_SELECTDB:
-            const dbnum = this.readLength()
-            logger.info(`Selecting DB: ${dbnum}`)
-            break
-
-          case RDB_TYPE.RDB_OPCODE_RESIZEDB:
-            const hashTableSize = this.readLength()
-            const expiryHashTableSize = this.readLength()
-            logger.info(
-              `DB sizes - main: ${hashTableSize}, expiry: ${expiryHashTableSize}`,
-            )
-            break
-
-          case RDB_TYPE.RDB_OPCODE_EOF:
-            logger.info('Found EOF marker')
-            return
-
-          default:
-            logger.info(`Unknown opcode: 0x${opcode.toString(16)}`)
-            // Try to recover by finding next valid opcode
-            while (this.position < this.data.length) {
-              const nextByte = this.data[this.position]
-              if (
-                [
-                  RDB_TYPE.RDB_OPCODE_EOF,
-                  RDB_TYPE.RDB_OPCODE_EXPIRETIME,
-                  RDB_TYPE.RDB_OPCODE_EXPIRETIME_MS,
-                  RDB_TYPE.STRING,
-                ].includes(nextByte)
-              ) {
-                break
-              }
-              this.position++
-            }
-        }
-      } catch (error) {
-        logger.error('Error processing opcode:', error)
+      if (opcode === RDB_TYPE.RDB_OPCODE_EOF) {
+        console.log('Found EOF marker') // Debug line
         break
       }
+
+      this.position++
+      this.processOpcode(opcode)
     }
+
+    console.log('Finished parsing database') // Debug line
+  }
+
+  private processOpcode(opcode: number) {
+    try {
+      console.log('Processing opcode:', opcode.toString(16))
+      if (opcode === RDB_TYPE.RDB_OPCODE_EXPIRETIME_MS) {
+        console.log('Processing expiry time entry')
+        this.processExpiryTimeEntry()
+      } else if (opcode === RDB_TYPE.STRING) {
+        console.log('Processing string entry')
+        this.processStringEntry()
+      } else if (opcode === 0xfa) {
+        // AUX field
+        console.log('Processing AUX field')
+        // Read key length and skip key
+        const keyLen = this.readLength()
+        this.position += keyLen
+        // Read value length and skip value
+        const valueLen = this.readLength()
+        this.position += valueLen
+      } else if (opcode === 0xfe) {
+        // Database selector
+        console.log('Processing database selector')
+        // Skip the database number
+        this.position++
+      } else if (opcode === 0xfb) {
+        // Database size
+        console.log('Processing database size')
+        // Skip the size information (2 integers)
+        this.position += 8
+      } else {
+        console.log(`Unknown opcode: 0x${opcode.toString(16)}`)
+      }
+    } catch (error) {
+      console.error('Error processing opcode:', error)
+      throw error
+    }
+  }
+
+  private processExpiryTimeEntry() {
+    const expiry = this.readExpiryTimestamp()
+    this.position++ // Skip string type byte
+    const { key, value } = this.readKeyValuePair()
+
+    if (key && value) {
+      this.cache.set(key, value) // Store raw value
+      this.expiryTimes.set(key, expiry)
+    }
+  }
+
+  private processStringEntry(): void {
+    // Read the key length and key
+    const keyLength = this.readLength()
+    const key = this.data
+      .slice(this.position, this.position + keyLength)
+      .toString()
+    this.position += keyLength
+
+    // Read the value length and value
+    const valueLength = this.readLength()
+    const value = this.data
+      .slice(this.position, this.position + valueLength)
+      .toString()
+    this.position += valueLength
+
+    // Store raw value in the cache (without RESP formatting)
+    this.cache.set(key, value) // Remove the RESP formatting here
+  }
+
+  private readExpiryTimestamp(): number {
+    const expiryBuffer = this.data.slice(this.position, this.position + 8)
+    const expiry = Number(expiryBuffer.readBigUInt64LE())
+    this.position += 8
+    logger.info(`Read expiry time: ${expiry}`)
+    return expiry
+  }
+
+  private readKeyValuePair(): { key: string; value: string } {
+    // Read the key length and key using proper length encoding
+    const keyLength = this.readLength()
+    const key = this.data
+      .slice(this.position, this.position + keyLength)
+      .toString('utf8')
+    this.position += keyLength
+
+    // Read the value length and value using proper length encoding
+    const valueLength = this.readLength()
+    const value = this.data
+      .slice(this.position, this.position + valueLength)
+      .toString('utf8')
+    this.position += valueLength
+
+    return { key, value }
   }
 
   private readExpiry(opcode: number): number {
@@ -167,11 +187,7 @@ export class RDBReader {
 
   getKey(key: string): string {
     const expiry = this.expiryTimes.get(key)
-    console.log('Key:', key)
-    console.log('Expiry:', expiry)
-    console.log('Current time:', Date.now())
     if (this.expiryTimes.has(key)) {
-      const expiry = this.expiryTimes.get(key)
       const now = Date.now()
       if (expiry && expiry < now) {
         this.cache.delete(key)
@@ -184,7 +200,7 @@ export class RDBReader {
     if (!value) {
       return `$-1\r\n`
     }
-    return RESPFormatter.formatBulkString(value)
+    return `$${value.length}\r\n${value}\r\n`
   }
 
   setKey(key: string, value: string, expiryMs?: number) {
@@ -293,33 +309,24 @@ export class RDBReader {
   }
 
   private readLength(): number {
-    const byte = this.data[this.position++]
-    const type = (byte & 0xc0) >> 6 // Get the first 2 bits
+    let length = 0
+    const firstByte = this.data[this.position++]
 
+    // Check for special encoding
+    const type = (firstByte & 0xc0) >> 6
     if (type === 0) {
-      return byte & 0x3f
+      // Length is in the first 6 bits
+      length = firstByte & 0x3f
     } else if (type === 1) {
-      const next = this.data[this.position++]
-      return ((byte & 0x3f) << 8) | next
+      // Read next byte
+      length = ((firstByte & 0x3f) << 8) | this.data[this.position++]
     } else if (type === 2) {
-      const length = this.data.readUInt32LE(this.position)
+      // Read next 4 bytes
+      length = this.data.readUInt32BE(this.position)
       this.position += 4
-      return length
-    } else {
-      const specialByte = byte & 0x3f
-      if (specialByte === 0) {
-        return this.data[this.position++]
-      } else if (specialByte === 1) {
-        const val = this.data.readUInt16LE(this.position)
-        this.position += 2
-        return val
-      } else if (specialByte === 2) {
-        const val = this.data.readUInt32LE(this.position)
-        this.position += 4
-        return val
-      }
-      throw new Error(`Unsupported special encoding: ${specialByte}`)
     }
+
+    return length
   }
 
   public setFileLocation(dir: string, filename: string) {
