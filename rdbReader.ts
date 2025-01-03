@@ -187,8 +187,10 @@ export class RDBReader {
 
   getKey(key: string): string {
     const expiry = this.expiryTimes.get(key)
+    console.log({ expiry })
     if (this.expiryTimes.has(key)) {
       const now = Date.now()
+      console.log({ now })
       if (expiry && expiry < now) {
         this.cache.delete(key)
         this.expiryTimes.delete(key)
@@ -207,8 +209,8 @@ export class RDBReader {
     // Update in-memory cache
     this.cache.set(key, value)
     if (expiryMs) {
-      const unixTime = Date.now() + expiryMs
-      this.expiryTimes.set(key, unixTime)
+      // Store the absolute timestamp directly, don't add to current time
+      this.expiryTimes.set(key, expiryMs)
     }
 
     // Calculate total buffer size needed

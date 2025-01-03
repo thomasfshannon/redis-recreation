@@ -253,7 +253,7 @@ describe('RDBReader', () => {
     rdbReader.read()
 
     // Set a key with 1 second expiry
-    rdbReader.setKey('expiring', 'value', 1000)
+    rdbReader.setKey('expiring', 'value', Date.now() + 1000)
 
     // Should exist immediately
     expect(rdbReader.getKey('expiring')).toBe('$5\r\nvalue\r\n')
