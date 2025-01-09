@@ -38,6 +38,10 @@ export class RDBReader {
   read() {
     try {
       this.data = this.fileReader.readBuffer()
+      if (this.data.length === 0) {
+        logger.info('[RDBReader:read]: No data to parse')
+        return
+      }
       logger.info('Buffer length:', this.data.length) // Debug line
       this.position = 0
       this.parseHeader()
