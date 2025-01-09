@@ -38,12 +38,12 @@ export class RDBReader {
   read() {
     try {
       this.data = this.fileReader.readBuffer()
-      console.log('Buffer length:', this.data.length) // Debug line
+      logger.info('Buffer length:', this.data.length) // Debug line
       this.position = 0
       this.parseHeader()
-      console.log('After header parse, position:', this.position) // Debug line
+      logger.info('After header parse, position:', this.position) // Debug line
       this.parseDatabase()
-      console.log('Cache size:', this.cache.size) // Debug line
+      logger.info('Cache size:', this.cache.size) // Debug line
       this.isInitialized = true
     } catch (error) {
       console.error('[RDBReader]: Error reading RDB file:', error)
@@ -58,16 +58,16 @@ export class RDBReader {
   }
 
   public parseDatabase() {
-    console.log('Starting database parse at position:', this.position) // Debug line
+    logger.info('Starting database parse at position:', this.position) // Debug line
 
     while (this.position < this.data.length) {
       const opcode = this.data[this.position]
-      console.log(
+      logger.info(
         `At position ${this.position}, found opcode: 0x${opcode.toString(16)}`,
       ) // Debug line
 
       if (opcode === RDB_TYPE.RDB_OPCODE_EOF) {
-        console.log('Found EOF marker') // Debug line
+        logger.info('Found EOF marker') // Debug line
         break
       }
 
@@ -75,21 +75,21 @@ export class RDBReader {
       this.processOpcode(opcode)
     }
 
-    console.log('Finished parsing database') // Debug line
+    logger.info('Finished parsing database') // Debug line
   }
 
   private processOpcode(opcode: number) {
     try {
-      console.log('Processing opcode:', opcode.toString(16))
+      logger.info('Processing opcode:', opcode.toString(16))
       if (opcode === RDB_TYPE.RDB_OPCODE_EXPIRETIME_MS) {
-        console.log('Processing expiry time entry')
+        logger.info('Processing expiry time entry')
         this.processExpiryTimeEntry()
       } else if (opcode === RDB_TYPE.STRING) {
-        console.log('Processing string entry')
+        logger.info('Processing string entry')
         this.processStringEntry()
       } else if (opcode === 0xfa) {
         // AUX field
-        console.log('Processing AUX field')
+        logger.info('Processing AUX field')
         // Read key length and skip key
         const keyLen = this.readLength()
         this.position += keyLen
@@ -98,16 +98,16 @@ export class RDBReader {
         this.position += valueLen
       } else if (opcode === 0xfe) {
         // Database selector
-        console.log('Processing database selector')
+        logger.info('Processing database selector')
         // Skip the database number
         this.position++
       } else if (opcode === 0xfb) {
         // Database size
-        console.log('Processing database size')
+        logger.info('Processing database size')
         // Skip the size information (2 integers)
         this.position += 8
       } else {
-        console.log(`Unknown opcode: 0x${opcode.toString(16)}`)
+        logger.info(`Unknown opcode: 0x${opcode.toString(16)}`)
       }
     } catch (error) {
       console.error('Error processing opcode:', error)
@@ -187,10 +187,10 @@ export class RDBReader {
 
   getKey(key: string): string {
     const expiry = this.expiryTimes.get(key)
-    console.log({ expiry })
+    logger.info({ expiry })
     if (this.expiryTimes.has(key)) {
       const now = Date.now()
-      console.log({ now })
+      logger.info({ now })
       if (expiry && expiry < now) {
         this.cache.delete(key)
         this.expiryTimes.delete(key)
@@ -340,7 +340,7 @@ export class RDBReader {
   getKeys() {
     // this.read()
     // Convert the iterator to an array before formatting
-    console.log(this.cache.keys())
+    logger.info(this.cache.keys())
     return RESPFormatter.formatArray(Array.from(this.cache.keys()))
   }
 
