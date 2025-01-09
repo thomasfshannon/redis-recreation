@@ -2,4 +2,6 @@
 
 To run against local testing file
 
-`./run.sh --dir ./ --dbfilename dump.rdb`
+```bash
+./run.sh --dir ./ --dbfilename dump.rdb
+```
