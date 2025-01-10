@@ -1,7 +1,9 @@
 {
 	"type": "module",
 	"scripts": {
-		"test": "vitest"
+		"test": "vitest",
+		"playground:resp": "npx tsx ./playground/resp.ts",
+		"playground:tokenizer": "npx tsx ./playground/tokenizer.ts"
 	},
 	"devDependencies": {
 		"@types/node": "^22.10.2",
