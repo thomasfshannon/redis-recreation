@@ -1,0 +1,12 @@
+{
+  "name": "slides",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "presentation": "npx @marp-team/marp-cli@latest -s ./powerpoint --html"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

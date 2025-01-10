@@ -104,14 +104,6 @@ function tokenizeQuote(input: string, current: number): TokenizerReturn {
 }
 
 export class Tokenizer {
-  private tokenizerFunctions: TokenizerFunction[] = [
-    tokenizeCRLF,
-    tokenizeMarker,
-    tokenizeQuote,
-    tokenizeString,
-    tokenizeNumber,
-  ]
-
   public tokenize(input: string): Token[] {
     const tokens: Token[] = []
     let i = 0
