@@ -13,8 +13,7 @@ class: invert
 1. What is Redis?
 2. Recreating Redis
     - Tokenizer
-    - abstract syntax trees
-    - interpreter
+    - interpreter / abstract syntax trees
     - reading RDB files
 3. code usages in studio
 4. redis introspection
@@ -229,14 +228,22 @@ public tokenize(input: string): Token[] {
 
 ---
 
+## Interpreter / Parsers / Abstract Syntax Trees
+
+Life cycle
+
+1. redis server starts and listens to input
+2. redis server listens to input
+3. on input - run interpreter
+  - create the tokens
+  - parser takes the tokens and creates an AST
+  - interpreter executes the AST
+  - show `./run.sh --dir ./ --dbfilename test-dump.rdb` 
 
 ---
 
-## Abstract Syntax Trees
 
----
 
-## Interpreter
 
 ---
 

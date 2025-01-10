@@ -1,9 +1,11 @@
 import * as net from 'net'
+import util from 'util'
 import { Parser } from './parser'
 import { RDBReader } from './rdbReader'
 import type RedisServer from './server'
 import { Tokenizer } from './tokenizer'
 import type { RedisValue } from './types'
+import logger from './logger'
 
 const redisCache = new Map<string, string>()
 const redisTimeCache = new Map<string, number>()
@@ -12,21 +14,6 @@ type CommandSet = {
   type: 'BulkString'
   value: string
 }[]
-
-const LOGGED_ENABLED = false
-
-const logger = {
-  info: (message: string) => {
-    if (LOGGED_ENABLED) {
-      console.log(message)
-    }
-  },
-  error: (message: string) => {
-    if (LOGGED_ENABLED) {
-      console.error(message)
-    }
-  },
-}
 
 export default class RedisInterpreter {
   private ast: RedisValue[] = []
@@ -72,7 +59,7 @@ export default class RedisInterpreter {
       }
       case 'SET': {
         const [key, val] = command.args as CommandSet
-        logger.info(`\n[Command]: SET ${key.value} ${val.value}\n`)
+        // logger.info(`\n[Command]: SET ${key.value} ${val.value}\n`)
 
         let expiryMs: number | undefined
         if (
@@ -105,7 +92,7 @@ export default class RedisInterpreter {
       }
       case 'GET': {
         const [key] = command.args as CommandSet
-        logger.info(`\n[Command]: GET ${key.value}\n`)
+        // logger.info(`\n[Command]: GET ${key.value}\n`)
         if (redisTimeCache.has(key.value)) {
           const unixTime = redisTimeCache.get(key.value)
           if (unixTime && unixTime < Date.now()) {
@@ -120,18 +107,18 @@ export default class RedisInterpreter {
           const valueInDb = this.rdbReader.getKey(key.value)
           return valueInDb
         }
-        logger.info(`\n[Response]: $${value?.length}\r\n${value}\r\n`)
+        // logger.info(`\n[Response]: $${value?.length}\r\n${value}\r\n`)
         return `$${value?.length}\r\n${value}\r\n`
       }
       case 'ECHO': {
         const [key] = command.args as CommandSet
-        logger.info(`\n[Command]: ECHO ${key.value}\n`)
-        logger.info(`\n[Response]: $${key.value.length}\r\n${key.value}\r\n`)
+        // logger.info(`\n[Command]: ECHO ${key.value}\n`)
+        // logger.info(`\n[Response]: $${key.value.length}\r\n${key.value}\r\n`)
         return `$${key.value.length}\r\n${key.value}\r\n`
       }
       case 'PING': {
-        logger.info(`\n[Command]: PING\n`)
-        logger.info(`\n[Response]: +PONG\r\n`)
+        // logger.info(`\n[Command]: PING\n`)
+        // logger.info(`\n[Response]: +PONG\r\n`)
         return `+PONG\r\n`
       }
     }
@@ -178,9 +165,18 @@ export default class RedisInterpreter {
       this.rdbReader.setFileLocation(state.directory, state.databaseFilename)
       this.rdbReader.read()
     }
+    logger.info(`\nRaw Input:\n`)
+    logger.info(input)
     const tokens = this.tokenizer.tokenize(input)
-    this.parser.setup(tokens)
+    logger.info(`\nTokens:\n`)
+    logger.info(tokens.map(t => `
+      type: ${t.type}
+      value: ${t.value}
+    `).join(''))
+    this.parser.setup(tokens) 
     this.ast = this.parser.parse()
+    logger.info('\nAST built\n')
+    logger.info(util.inspect(this.ast, true, null))
     const response = this.execute(connection, state)
     return response
   }

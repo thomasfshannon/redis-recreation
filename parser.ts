@@ -49,65 +49,6 @@ export class Parser implements RedisParser {
   }
 
   /**
-   * Parse a bulk string value, handling both RESP format and quoted strings
-   * @returns The value of the bulk string
-   */
-  private parseBulkString(): RedisValue {
-    const nextToken = this.peek()
-
-    // Handle BulkMarker strings (RESP format)
-    if (nextToken.type === 'BulkMarker') {
-      this.consume() // consume the BulkMarker
-      const lengthToken = this.expect('BulkString')
-      this.expect('CRLF')
-
-      // Special handling for quoted strings
-      if (this.peek().type === 'Quote') {
-        this.consume() // Quote
-        const value = this.peek().value // ArrayMarker '*'
-        this.consume() // ArrayMarker
-        this.expect('Quote')
-        this.expect('CRLF')
-        return {
-          type: 'BulkString',
-          value: value,
-        }
-      }
-
-      const stringToken = this.expect('BulkString')
-      this.expect('CRLF')
-      return {
-        type: 'BulkString',
-        value: stringToken.value,
-      }
-    }
-
-    // Handle regular bulk strings
-    if (nextToken.type === 'BulkString') {
-      const token = this.consume()
-      return {
-        type: 'BulkString',
-        value: token.value,
-      }
-    }
-
-    // Handle quoted strings
-    if (nextToken.type === 'Quote') {
-      this.consume() // consume the Quote token
-      const stringToken = this.expect('BulkString')
-      this.expect('Quote')
-      return {
-        type: 'BulkString',
-        value: stringToken.value,
-      }
-    }
-
-    throw new Error(
-      `Unexpected token type in parseBulkString: ${nextToken.type}`,
-    )
-  }
-
-  /**
    * Parse a command value, handling both quoted and RESP format inputs
    * @returns The value of the command with name and arguments
    */
