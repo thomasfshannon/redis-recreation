@@ -1,4 +1,5 @@
 import { unlinkSync, writeFileSync } from 'fs'
+import crypto from 'crypto'
 import os from 'os'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'

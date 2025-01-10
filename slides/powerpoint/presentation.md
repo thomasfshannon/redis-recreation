@@ -230,15 +230,13 @@ public tokenize(input: string): Token[] {
 
 ## Interpreter / Parsers / Abstract Syntax Trees
 
-Life cycle
+---
 
-1. redis server starts and listens to input
-2. redis server listens to input
-3. on input - run interpreter
-  - create the tokens
-  - parser takes the tokens and creates an AST
-  - interpreter executes the AST
-  - `npm run example` 
+<img height="100%" src="./diagram.png" />
+
+---
+
+`npm run example` 
 
 ---
 
@@ -267,3 +265,18 @@ https://rdb.fnordig.de/file_format.html
 ---
 
 Hex Demo
+
+<img height="85%" src="./hex_editor.png" />
+
+---
+
+Taking a peek
+
+rdbReader
+
+rdbReader.spec.ts
+
+---
+
+Studio Usages
+
