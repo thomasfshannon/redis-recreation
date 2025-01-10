@@ -175,20 +175,6 @@ export class RDBReader {
     return { key, value }
   }
 
-  private readExpiry(opcode: number): number {
-    let timestamp: number
-
-    if (opcode === RDB_TYPE.RDB_OPCODE_EXPIRETIME) {
-      timestamp = this.data.readUInt32LE(this.position)
-      this.position += 4
-      return timestamp * 1000 + Date.now() // Convert to ms and add to current time
-    } else {
-      timestamp = Number(this.data.readBigUInt64LE(this.position))
-      this.position += 8
-      return timestamp + Date.now()
-    }
-  }
-
   getKey(key: string): string {
     const expiry = this.expiryTimes.get(key)
     logger.info({ expiry })
@@ -277,43 +263,6 @@ export class RDBReader {
     this.position = 9
   }
 
-  private readString(length?: number): string {
-    if (length === undefined) {
-      length = this.data[this.position++]
-    }
-    // Don't return early for length 0, as it might be a valid empty string
-    // that we still need to advance the position for
-
-    const str = this.data
-      .slice(this.position, this.position + length)
-      .toString('utf8')
-    this.position += length
-    logger.info(`Read string of length ${length}: "${str}"`)
-    return str
-  }
-
-  private readByte(): number | undefined {
-    // Check if we're at or past the end of the buffer
-    if (this.position >= this.data.length) {
-      // logger.info(
-      //   `Buffer boundary reached at position: ${this.position}, buffer length: ${this.data.length}`,
-      // )
-      return undefined
-    }
-
-    const byte = this.data[this.position]
-    this.position += 1
-    return byte
-  }
-
-  private isEndOfSection(byte: number | undefined): boolean {
-    return byte === undefined || byte.toString(16) === 'fe'
-  }
-
-  private peekByte(): number {
-    return this.data[this.position]
-  }
-
   private readLength(): number {
     let length = 0
     const firstByte = this.data[this.position++]
@@ -350,40 +299,5 @@ export class RDBReader {
 
   getAuxFields() {
     return []
-  }
-
-  private readEncodedString(): string {
-    const length = this.readLength()
-    if (length === 0) return ''
-
-    // Read exactly 'length' bytes and ensure we're reading valid UTF-8
-    const stringBuffer = this.data.slice(this.position, this.position + length)
-    this.position += length
-
-    // Remove any null bytes from the end of the buffer
-    const cleanBuffer = stringBuffer.filter((byte) => byte !== 0)
-    return Buffer.from(cleanBuffer).toString('utf8')
-  }
-
-  private findNextValidPosition(): number {
-    while (this.position < this.data.length) {
-      const byte = this.data[this.position]
-      if (
-        [
-          RDB_TYPE.RDB_OPCODE_EOF,
-          RDB_TYPE.RDB_OPCODE_EXPIRETIME,
-          RDB_TYPE.RDB_OPCODE_EXPIRETIME_MS,
-          RDB_TYPE.STRING,
-          RDB_TYPE.LIST,
-          RDB_TYPE.SET,
-          RDB_TYPE.ZSET,
-          RDB_TYPE.HASH,
-        ].includes(byte)
-      ) {
-        return this.position
-      }
-      this.position++
-    }
-    return this.position
   }
 }

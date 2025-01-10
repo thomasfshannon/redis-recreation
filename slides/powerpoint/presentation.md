@@ -238,13 +238,32 @@ Life cycle
   - create the tokens
   - parser takes the tokens and creates an AST
   - interpreter executes the AST
-  - show `./run.sh --dir ./ --dbfilename test-dump.rdb` 
+  - `npm run example` 
 
 ---
 
-
-
+Let's look at `executeCommand`
 
 ---
 
 ## Reading RDB files
+
+An RDB file in Redis is a binary file that represents a snapshot of the in-memory data at a particular point in time. RDB stands for "Redis Database" file, and it's used for persistence in Redis to save the dataset to disk. 
+
+Redis stores the binary in hexidecimal form
+
+---
+
+## Anatomy of an rdb file
+
+---
+
+Source:
+
+https://rdb.fnordig.de/file_format.html
+
+<img height="85%" src="./redis-explained.png" />
+
+---
+
+Hex Demo

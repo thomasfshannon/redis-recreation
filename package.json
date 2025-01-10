@@ -3,7 +3,8 @@
 	"scripts": {
 		"test": "vitest",
 		"playground:resp": "npx tsx ./playground/resp.ts",
-		"playground:tokenizer": "npx tsx ./playground/tokenizer.ts"
+		"playground:tokenizer": "npx tsx ./playground/tokenizer.ts",
+		"example": "./run.sh --dir ./ --dbfilename test-dump.rdb"
 	},
 	"devDependencies": {
 		"@types/node": "^22.10.2",
