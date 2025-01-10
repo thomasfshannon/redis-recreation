@@ -280,3 +280,31 @@ rdbReader.spec.ts
 
 Studio Usages
 
+logging into studio
+
+`docker exec -it website-redis-1 redis-cli`
+
+--
+
+datasource cache
+
+---
+
+PUBSUB CHANNELS *
+
+SUBSCRIBE <channel-name>
+
+demo CLIP_ENTITY_CHANGED
+
+---
+
+query optimizations for new user system (show sql query)
+
+---
+
+rate limiting
+
+`graphql-rate-limit-directive`
+
+
+
